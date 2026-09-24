@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import shutil
 import tempfile
 import urllib.error
 import urllib.request
-import zipfile
 from pathlib import Path
 
-from .errors import (
-    VrfkitDownloadError,
-    VrfkitIntegrityError,
-)
+from .errors import VrfkitDownloadError
 
 _REPOSITORY = "Matthias1590/vrfkit"
 _EXECUTABLE_NAME = "vrfkit.exe"
@@ -68,7 +63,6 @@ def _cache_root() -> Path:
 
 
 def _install_release(tag: str, install_dir: Path) -> None:
-    archive_name = f"vrfkit-{tag}-windows-x64.zip"
     release_url = (
         f"https://github.com/{_REPOSITORY}/releases/download/{tag}"
     )
@@ -79,23 +73,19 @@ def _install_release(tag: str, install_dir: Path) -> None:
         dir=install_dir.parent,
         prefix=f".{tag}-",
     ) as temporary_directory:
-        temporary_path = Path(temporary_directory)
-        archive_path = temporary_path / archive_name
-        checksum_path = temporary_path / f"{archive_name}.sha256"
-        extracted_path = temporary_path / "install"
-
-        _download(f"{release_url}/{archive_name}", archive_path)
-        _download(
-            f"{release_url}/{archive_name}.sha256",
-            checksum_path,
+        executable_path = (
+            Path(temporary_directory) / _EXECUTABLE_NAME
         )
-        _verify_checksum(archive_path, checksum_path)
-        _extract_executable(archive_path, extracted_path)
+
+        _download(
+            f"{release_url}/{_EXECUTABLE_NAME}",
+            executable_path,
+        )
 
         try:
             install_dir.mkdir(parents=True, exist_ok=True)
             shutil.move(
-                extracted_path / _EXECUTABLE_NAME,
+                executable_path,
                 install_dir / _EXECUTABLE_NAME,
             )
         except OSError as error:
@@ -119,49 +109,4 @@ def _download(url: str, destination: Path) -> None:
     except (urllib.error.URLError, OSError) as error:
         raise VrfkitDownloadError(
             f"Could not download {url}"
-        ) from error
-
-
-def _verify_checksum(
-    archive_path: Path,
-    checksum_path: Path,
-) -> None:
-    try:
-        expected = checksum_path.read_text("utf-8").split()[0].lower()
-    except (OSError, IndexError) as error:
-        raise VrfkitIntegrityError(
-            "The release checksum file is invalid"
-        ) from error
-
-    digest = hashlib.sha256()
-
-    try:
-        with archive_path.open("rb") as archive:
-            for chunk in iter(lambda: archive.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as error:
-        raise VrfkitIntegrityError(
-            "Could not read the downloaded release archive"
-        ) from error
-
-    actual = digest.hexdigest()
-
-    if actual != expected:
-        raise VrfkitIntegrityError(
-            f"Release checksum mismatch: expected {expected}, got {actual}"
-        )
-
-
-def _extract_executable(
-    archive_path: Path,
-    destination: Path,
-) -> None:
-    try:
-        with zipfile.ZipFile(archive_path) as archive:
-            member = archive.getinfo(_EXECUTABLE_NAME)
-            destination.mkdir(parents=True)
-            archive.extract(member, destination)
-    except (KeyError, OSError, zipfile.BadZipFile) as error:
-        raise VrfkitDownloadError(
-            "The release archive does not contain a valid vrfkit.exe"
         ) from error

@@ -6,10 +6,6 @@ class VrfkitDownloadError(VrfkitError):
     """Raised when a vrfkit release cannot be downloaded or extracted."""
 
 
-class VrfkitIntegrityError(VrfkitDownloadError):
-    """Raised when a downloaded release fails integrity verification."""
-
-
 class VrfkitExportError(VrfkitError):
     """Raised when vrfkit fails to export a replay."""
 
